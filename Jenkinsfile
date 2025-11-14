@@ -1,19 +1,14 @@
 pipeline {
-    agent {
-        kubernetes {
-            label 'kaniko'
-            defaultContainer 'kaniko'
-        }
-    }
+    agent any
 
     environment {
-        DOCKERHUB = "abhirambsn"
-        IMAGE = "sample-api"
+        DOCKERHUB_USER = "abhirambsn"
+        IMAGE_NAME = "sample-api"
+        REGISTRY_CREDENTIALS = "dockerhub-creds"
         GIT_CREDENTIALS = "github-creds"
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 checkout([$class: 'GitSCM',
@@ -26,43 +21,50 @@ pipeline {
             }
         }
 
-        stage('Build & Push Docker Image') {
+        stage('Build Docker Image') {
             steps {
-                container('kaniko') {
-                    script {
-                        IMAGE_TAG = "build-${env.BUILD_NUMBER}"
-                        sh """
-                        /kaniko/executor \
-                          --context `pwd`/api \
-                          --dockerfile `pwd`/api/Dockerfile \
-                          --destination=$DOCKERHUB/$IMAGE:$IMAGE_TAG \
-                          --cache=true
-                        """
-                    }
+                script {
+                    IMAGE_TAG = "build-${env.BUILD_NUMBER}"
+                    sh "docker build -t $DOCKERHUB_USER/$IMAGE_NAME:$IMAGE_TAG ./api"
                 }
             }
         }
 
-        stage('Update Deployment Manifest') {
-            steps {
-                sh """
-                sed -i 's|image:.*|image: $DOCKERHUB/$IMAGE:${IMAGE_TAG}|' k8s/deployment.yaml
-                """
-            }
-        }
-
-        stage('Commit and Push Changes') {
+        stage('Push Docker Image') {
             steps {
                 withCredentials([usernamePassword(
-                    credentialsId: GIT_CREDENTIALS,
+                    credentialsId: REGISTRY_CREDENTIALS,
                     usernameVariable: 'USER',
                     passwordVariable: 'PASS'
                 )]) {
+                    sh "echo $PASS | docker login -u $USER --password-stdin"
+                    sh "docker push $DOCKERHUB_USER/$IMAGE_NAME:$IMAGE_TAG"
+                }
+            }
+        }
+
+        stage('Update Kubernetes Manifests') {
+            steps {
+                script {
                     sh """
-                    git config user.email "jenkins@example.com"
+                    sed -i 's|image: .*|image: $DOCKERHUB_USER/$IMAGE_NAME:$IMAGE_TAG|' k8s/deployment.yaml
+                    """
+                }
+            }
+        }
+
+        stage('Commit & Push Updated Manifest') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: GIT_CREDENTIALS,
+                    usernameVariable: 'GIT_USER',
+                    passwordVariable: 'GIT_PASS'
+                )]) {
+                    sh """
+                    git config user.email "jenkins@jenkins.local"
                     git config user.name "Jenkins"
-                    git commit -am "Update image tag to ${IMAGE_TAG}" || true
-                    git push https://${USER}:${PASS}@github.com/abhirambsn/sample-api.git main
+                    git commit -am "Update image to tag $IMAGE_TAG" || true
+                    git push https://$GIT_USER:$GIT_PASS@github.com/abhirambsn/sample-api.git main
                     """
                 }
             }
