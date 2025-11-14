@@ -25,7 +25,7 @@ pipeline {
             steps {
                 script {
                     IMAGE_TAG = "build-${env.BUILD_NUMBER}"
-                    sh "docker build -t $DOCKERHUB_USER/$IMAGE_NAME:$IMAGE_TAG ./api"
+                    sh "docker build -t $DOCKERHUB_USER/$IMAGE_NAME:$IMAGE_TAG ."
                 }
             }
         }
