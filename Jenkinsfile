@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_USER = "YOUR_DOCKERHUB_USERNAME"
+        DOCKERHUB_USER = "abhirambsn"
         IMAGE_NAME = "sample-api"
         REGISTRY_CREDENTIALS = "dockerhub"
         GIT_CREDENTIALS = "github-creds"
