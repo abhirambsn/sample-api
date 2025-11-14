@@ -64,7 +64,7 @@ pipeline {
                     git config user.email "jenkins@jenkins.local"
                     git config user.name "Jenkins"
                     git commit -am "Update image to tag $IMAGE_TAG" || true
-                    git push https://$GIT_USER:$GIT_PASS@github.com/abhirambsn/sample-api.git main
+                    git push https://$GIT_USER:$GIT_PASS@github.com/abhirambsn/sample-api.git
                     """
                 }
             }
