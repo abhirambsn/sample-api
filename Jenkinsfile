@@ -2,14 +2,22 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_USER = "abhirambsn"
-        IMAGE_NAME = "sample-app"
+        DOCKERHUB_USER = "YOUR_DOCKERHUB_USERNAME"
+        IMAGE_NAME = "sample-api"
+        REGISTRY_CREDENTIALS = "dockerhub"
+        GIT_CREDENTIALS = "github-creds"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                git 'https://github.com/abhirambsn/sample-app.git'
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/abhirambsn/sample-api.git',
+                        credentialsId: GIT_CREDENTIALS
+                    ]]
+                ])
             }
         }
 
@@ -22,16 +30,20 @@ pipeline {
             }
         }
 
-        stage('Push to Docker Hub') {
+        stage('Push Docker Image') {
             steps {
-                script {
-                    sh "echo $DOCKERHUB_PASS | docker login -u $DOCKERHUB_USER --password-stdin"
+                withCredentials([usernamePassword(
+                    credentialsId: REGISTRY_CREDENTIALS,
+                    usernameVariable: 'USER',
+                    passwordVariable: 'PASS'
+                )]) {
+                    sh "echo $PASS | docker login -u $USER --password-stdin"
                     sh "docker push $DOCKERHUB_USER/$IMAGE_NAME:$IMAGE_TAG"
                 }
             }
         }
 
-        stage('Update K8s manifest') {
+        stage('Update Kubernetes Manifests') {
             steps {
                 script {
                     sh """
@@ -41,14 +53,18 @@ pipeline {
             }
         }
 
-        stage('Commit & Push') {
+        stage('Commit & Push Updated Manifest') {
             steps {
-                script {
+                withCredentials([usernamePassword(
+                    credentialsId: GIT_CREDENTIALS,
+                    usernameVariable: 'GIT_USER',
+                    passwordVariable: 'GIT_PASS'
+                )]) {
                     sh """
                     git config user.email "jenkins@example.com"
                     git config user.name "Jenkins"
-                    git commit -am "Update image tag to $IMAGE_TAG"
-                    git push origin main
+                    git commit -am "Update image to tag $IMAGE_TAG" || true
+                    git push https://$GIT_USER:$GIT_PASS@github.com/YOUR_GITHUB/sample-app.git main
                     """
                 }
             }
